@@ -27,7 +27,7 @@ class Instrument extends Controller
         $can_reserve = $user_model->canReserve();
 
         // ビューに渡す
-        $this->view->render('instrument_list.php', [
+        $this->view->render('inst_list.php', [
             'rows' => $rows,
             'categories' => $categories,
             'selected' => $selected,
