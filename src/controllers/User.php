@@ -70,7 +70,7 @@ class User extends Controller
             $member_model = new Member();
             $member = $member_model->getDetailByUid($user['uid']);
             if ($member) {
-                $_SESSION['member_id'] = $member['id'];
+                $_SESSION['member_id'] = (int)$member['id'];
                 $_SESSION['member_authority'] = $member['authority'];
             }
 

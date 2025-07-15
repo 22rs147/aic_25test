@@ -92,7 +92,7 @@ class User extends Model {
     public function getLoginMemberId()
     {
         if (isset($_SESSION['member_id'])){
-            return $_SESSION['member_id'];
+            return (int)$_SESSION['member_id'];
         }
         return null;
     }
@@ -115,8 +115,9 @@ class User extends Model {
     
     public function isOwner($mbr_id)
     {
-        if ($this->getLoginMemberId()){
-            return ($this->getLoginMemberId() === $mbr_id);
+        $login_mid = $this->getLoginMemberId();
+        if ($login_mid !== null) {
+            return ($login_mid === (int)$mbr_id);
         }
         return false;
     }

@@ -1,7 +1,9 @@
 <?php
+
 namespace aic\controllers;
 
 use aic\models\User;
+use aic\models\Security;
 
 class Member extends Controller
 {
@@ -34,9 +36,32 @@ class Member extends Controller
             $this->view->assign('is_admin', $user->isAdmin());
             $this->view->assign('is_owner', $user->isOwner($id));
         }
-        
+
         $this->view->render('mbr_detail.php');
     }
 
-    // listAction, saveAction などの他のアクションもここに追加できます
+    /**
+     * 会員情報編集フォーム表示
+     */
+    public function inputAction($id = null)
+    {
+        $security = new Security();
+        $security->require('login'); // ログイン必須
+
+        $mbr_id = (int)$id;
+
+        // 管理者でない場合は、自分の情報しか編集できない
+        if (!(new User)->isAdmin()) {
+            $security->require('owner', $mbr_id);
+        }
+
+        $row = $this->model->getDetail($mbr_id);
+
+        $data = [
+            'row' => $row,
+            'mbr_id' => $mbr_id
+        ];
+
+        $this->view->render('mbr_input.php', $data);
+    }
 }

@@ -19,4 +19,5 @@ class Member extends Model
         if (!$rs) die('エラー: ' . $this->db->error);
         return $rs->fetch_assoc(); 
     }
+
 }
