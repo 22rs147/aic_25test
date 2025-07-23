@@ -37,6 +37,5 @@ function make_timeline(id,items, groups, start_time=null, end_time=null, step){
             //element.classList.add('text-info');
         }    
     });
-    
 
 }
