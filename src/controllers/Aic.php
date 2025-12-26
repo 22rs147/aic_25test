@@ -206,7 +206,7 @@ class Aic extends Controller
             ? $image_path
             : 'img/dummy-image-square1.webp';
 
-        // 整理したデータをビューに渡し、詳細画面をレンダリングします。
+        // 準備した全てのデータをビューに渡してレンダリングします。
         $this->view->render('aic_detail.php', [
             'instrument'     => $instrument,
             'image_url'      => $image_url,

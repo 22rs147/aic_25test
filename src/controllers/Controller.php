@@ -5,6 +5,9 @@ use aic\models\Model;
 use aic\views\View;
 use aic\models\User;
 
+/**
+ * アプリケーション全体の共通処理を集約し、各コントローラーの基盤を提供します。
+ */
 abstract class Controller
 {
     protected $model;

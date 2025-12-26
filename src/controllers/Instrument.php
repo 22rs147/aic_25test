@@ -11,19 +11,20 @@ class Instrument extends Controller
         $where = '1';
         $orderby = 'room_id';
 
+        // URLパラメータからカテゴリIDを取得し、一覧の絞り込み条件を構築します。
         if ($c !== null) {
             $where = 'category=' . intval($c);
             $selected = intval($c);
         }
 
-        // モデルからデータを取得する (JOINにより部屋情報も含まれる)。
+        // 機器情報に加えて部屋情報を結合して取得するために、モデルのgetListメソッドを実行します。
         $rows = $this->model->getList($where, $orderby);
         
-        // ビューで使用するデータを準備する。
+        // 画面のプルダウンメニューや予約可否の判定に使用するデータを準備します。
         $categories = KsuCode::INST_CATEGORY;
         $can_reserve = $this->user->canReserve();
 
-        // ビューに渡す。
+        // 準備した機器リストとカテゴリ情報をビューに渡し、一覧画面をレンダリングします。
         $this->view->render('inst_list.php', [
             'rows' => $rows,
             'categories' => $categories,
@@ -36,11 +37,11 @@ class Instrument extends Controller
     {
         $id = (int)$id;
 
-        // Get data from the model
+        // 特定の機器に関する詳細な情報を表示するために、データベースからデータを取得します。
         $instrument = $this->model->getDetail($id);
 
         if ($instrument) {
-            // Check for image, using file_exists and getimagesize for reliability
+            // ユーザーが機器の外観を確認できるように、画像ファイルの存在をチェックして適切なパスを設定します。
             $image_path = 'img/instrument/' . $instrument['id'] . '.webp';
             $image_url = (file_exists($image_path) && @getimagesize($image_path))
                 ? $image_path
@@ -56,7 +57,7 @@ class Instrument extends Controller
             $data['error'] = '指定された機器は存在しません。';
         }
 
-        // Render the view, passing all prepared data
+        // 取得した詳細データと画像情報をビューに渡し、詳細画面を表示します。
         $this->view->render('inst_detail.php', $data);
     }
 }
