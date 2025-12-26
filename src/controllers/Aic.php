@@ -27,21 +27,20 @@ class Aic extends Controller
         }
         $start_date->setTime(0, 0, 0);
 
-        // 表示するタイムラインの時間範囲を定義します。
+        // タイムラインに表示する時間軸の範囲を定義します。
         $timeline_start_str = $start_date->format('Y-m-d 08:00:00');
         $timeline_end_str = $start_date->format('Y-m-d 23:59:59');
 
-        // モデルからデータを取得します。
+        // 予約状況と機器情報を取得するために、それぞれのモデルをインスタンス化します。
         $reserve_model = new Reserve();
         $instrument_model = new Instrument();
 
         $items = $reserve_model->getItems($inst_id_filter, $timeline_start_str, $timeline_end_str);
 
-        // ビューに渡すデータを準備します。
-        // タイムラインのグループ（機器リスト）を作成し、詳細ページへのリンクを設定します。
+        // タイムラインの各行（機器リスト）を作成し、詳細ページへのリンクを設定します。
         $groups = [];
         if ($inst_id_filter > 0) {
-            // 特定の機器のみ表示
+            // フィルタが指定されている場合は、該当する機器のみをグループに追加します。
             $instrument = $instrument_model->getDetail($inst_id_filter);
             if ($instrument) {
                 $link = sprintf(
@@ -53,7 +52,7 @@ class Aic extends Controller
                 $groups[] = ['id' => $instrument['id'], 'content' => $link];
             }
         } else {
-            // 全ての機器を表示
+            // フィルタがない場合は、登録されている全ての機器を表示対象とします。
             $instruments = $instrument_model->getList();
             foreach ($instruments as $instrument) {
                 $link = sprintf(
@@ -89,23 +88,23 @@ class Aic extends Controller
         ]);
     }
 
-/**
+    /**
      * 特定の機器の予約状況タイムライン（7日間）を表示します。
      */
     public function detailAction($id = 0, $d = null)
     {
         $inst_id = (int)$id;
-        // IDが指定されていない場合は機器一覧へ
+        // 機器IDが不正な場合は、安全のために機器一覧画面へリダイレクトします。
         if ($inst_id === 0) {
             $this->redirect('?to=inst&do=list');
             return;
         }
 
-        // 1. 日付の処理
+        // 表示の基準となる日付を決定し、適切なDateTimeオブジェクトを作成します。
         $date_curr = date("ymd");
         $selected_ymd = $d ?? $date_curr;
         
-        // 開始日オブジェクトの生成
+        // パラメータから開始日を生成し、不正な場合は現在日時をデフォルトとして使用します。
         try {
             $_start = DateTime::createFromFormat('!ymd', $selected_ymd);
             if (!$_start) throw new \Exception();
@@ -114,12 +113,12 @@ class Aic extends Controller
         }
         $_start->setTime(0, 0, 0);
 
-        // DB検索用の期間（実際の7日間）
+        // タイムラインに表示する1週間分のデータを取得するため、検索期間を設定します。
         $date_start_str = $_start->format('Y-m-d 00:00:00');
         $date_end_obj   = (clone $_start)->modify('+6 days'); // +7 daysだと8日分になる可能性があるため調整
         $date_end_str   = $date_end_obj->format('Y-m-d 23:59:59');
 
-        // 2. モデルからデータを取得
+        // 機器の詳細情報と、その機器に関連する予約データを取得します。
         $instrument_model = new Instrument();
         $instrument = $instrument_model->getDetail($inst_id);
 
@@ -129,30 +128,28 @@ class Aic extends Controller
         }
 
         $reserve_model = new Reserve();
-        // 実際の期間の予約を取得
+        // 指定された期間内に含まれる予約データをデータベースから取得します。
         $reservations = $reserve_model->getListByInst($inst_id, $date_start_str, $date_end_str);
         
-        // 3. タイムライン表示用にデータを「正規化」する
-        // 異なる日付のデータを、画面上では同じタイムライン（X軸）に表示するために、
-        // 全ての日付を「ダミーの日付（2000-01-01）」に変換します。
+        // 異なる日付の予約を同一の時間軸上に並べるため、日付部分をダミーデータに置き換えて正規化します。
         
         $dummy_date = '2000-01-01'; 
         $timeline_view_start = $dummy_date . ' 08:00:00';
         $timeline_view_end   = $dummy_date . ' 23:59:59';
 
-        // 予約データの加工（DB生データ -> 表示用データ）
+        // データベースから取得した生の予約データを、タイムライン表示用の形式に変換します。
         $raw_items = Reserve::toItemsByDate($reservations);
         $normalized_items = [];
 
         foreach ($raw_items as $item) {
-            // item['start'] は 'Y-m-d H:i:s' 形式
+            // データベースの開始日時をDateTimeオブジェクトとして扱います。
             $real_start = new DateTime($item['start']);
             $real_end   = new DateTime($item['end']);
             
-            // グループIDは実際の日付（Y-m-d）にします
+            // タイムラインの行を識別するため、実際の日付をグループIDとして設定します。
             $group_id = $real_start->format('Y-m-d');
 
-            // 表示用時間は、日付部分だけダミー日に書き換えます
+            // グラフ上の位置を揃えるため、時刻情報のみを維持して日付を統一します。
             $view_start = $dummy_date . ' ' . $real_start->format('H:i:s');
             $view_end   = $dummy_date . ' ' . $real_end->format('H:i:s');
 
@@ -167,20 +164,18 @@ class Aic extends Controller
             ];
         }
 
-        // 4. グループ（行）データの作成
-        // 7日分の日付行を作成します。
+        // タイムラインの縦軸となる7日分の日付行データを生成します。
         $groups = [];
         $current = clone $_start;
-        // ループ範囲修正: 開始日から7日間
+        // 開始日から1週間分の日付行を順番に作成します。
         for ($i = 0; $i < 7; $i++) {
             $date_str = $current->format('Y-m-d'); // グループID
             $ymd      = $current->format('ymd');   // URL用パラメータ
             
-            // リンク作成 (元のaic_detail.phpのロジックをMVC形式に適合)
-            // href="?to=rsv&do=input..." の形式にします
-            $label = Util::jpdate($date_str); // 日本語日付変換
+            // ユーザーが直感的に理解できるよう、日付を日本語形式に変換します。
+            $label = Util::jpdate($date_str);
             
-            // ボタンのHTML生成
+            // 予約入力画面へ遷移するためのボタンHTMLを組み立てます。
             $link_html = sprintf(
                 '<a class="btn btn-info" href="?to=rsv&do=input&inst=%d&d=%s">%s予約する</a>',
                 $inst_id,
@@ -193,7 +188,7 @@ class Aic extends Controller
             $current->modify('+1 day');
         }
 
-        // 5. ナビゲーションリンク（1週間前/後）
+        // 前後の期間へ移動するためのナビゲーションリンクを生成します。
         $nav_defs = ['-7' => '1週間前', '+7' => '1週間後'];
         $nav_links = [];
         foreach ($nav_defs as $delta => $label) {
@@ -205,14 +200,13 @@ class Aic extends Controller
             ];
         }
 
-        // 画像URL処理
+        // 機器の画像を表示するために、ファイルの存在確認を行い適切なパスを設定します。
         $image_path = 'img/instrument/' . $inst_id . '.webp';
-        // @getimagesize で存在確認と画像チェック
         $image_url = (file_exists($image_path) && @getimagesize($image_path))
             ? $image_path
             : 'img/dummy-image-square1.webp';
 
-        // 6. ビューへのデータ渡し
+        // 整理したデータをビューに渡し、詳細画面をレンダリングします。
         $this->view->render('aic_detail.php', [
             'instrument'     => $instrument,
             'image_url'      => $image_url,
