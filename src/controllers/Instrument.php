@@ -5,6 +5,9 @@ use aic\models\KsuCode;
 
 class Instrument extends Controller
 {
+    /**
+     * 登録されている機器の一覧をカテゴリ別に表示します。
+     */
     public function listAction($c = null): void
     {
         $selected = 0;
@@ -33,6 +36,9 @@ class Instrument extends Controller
         ]);
     }
 
+    /**
+     * 特定の機器に関する詳細な情報と画像を表示します。
+     */
     public function detailAction($id = 0)
     {
         $id = (int)$id;
