@@ -37,13 +37,21 @@ $jpdate_end   = Util::jpdate($display_end);
     .vis-time-axis .vis-text.vis-major {
       display: none; /* 大目盛りラベルの非表示 */
     }
-    /* 予約バーの視認性を高める追加スタイル */
-    #visualization {
-        border: 1px solid #ddd;
-    }
 </style>
 
-<div id="visualization" class="mt-2"></div>
+<?php foreach ($days_data as $index => $day): ?>
+    <div id="visualization_<?= $index ?>" class="mt-2 border-bottom pb-2"></div>
+    <script type="text/javascript">
+        (function() {
+            const items = <?= $day['items_json'] ?>;
+            const groups = <?= $day['groups_json'] ?>;
+            const date_start = "<?= $day['start'] ?>";
+            const date_end = "<?= $day['end'] ?>";
+            const step = 3;
+            make_timeline("visualization_<?= $index ?>", items, groups, date_start, date_end, step);
+        })();
+    </script>
+<?php endforeach; ?>
 
 <div class="pb-2 m-2">
     <a href="?to=inst&do=list" class="btn btn-outline-info m-1">機器設備一覧へ</a>

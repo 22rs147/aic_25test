@@ -1,4 +1,5 @@
 <?php
+
 namespace aic\controllers;
 
 use aic\models\Instrument;
@@ -9,41 +10,183 @@ use aic\models\Security;
 use aic\models\KsuCode;
 use aic\models\RsvMember;
 use aic\models\RsvSample;
-use aic\models\User;
 use aic\models\Util;
 use DateTime;
 
 class Reserve extends Controller
 {
+    /**
+     * 予約一覧を表示します。
+     */
+    public function listAction(
+        $inst = 0,
+        $status = 0,
+        $y = null,
+        $m = null,
+        $d = 0,
+        $t = 7, // timespan
+        $room = null, // to avoid "Unknown named parameter" error
+        $page = 1,
+        $sort_col = null,
+        $sort_dir = null
+    ) {
+        // 権限チェックとして、ログインしているか確認します。
+        (new Security)->require('login');
+
+        // デバッグ情報用の変数を初期化します。
+        $debug_info = [];
+
+        // 予約モデルのインスタンスを生成します。
+        $reserve_model = new ReserveModel();
+
+        // 検索パラメータを取得します。POSTリクエストがあればそれを優先し、なければセッションから、それもなければデフォルト値を使用します。
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $debug_info['source'] = 'POST';
+            $inst = $_POST['id'] ?? $inst;
+            $status = $_POST['status'] ?? $status;
+            $y = $_POST['y'] ?? date('Y');
+            $m = $_POST['m'] ?? date('m');
+            $d = $_POST['d'] ?? 0;
+            $t = $_POST['t'] ?? 7;
+            $_SESSION['selected_inst'] = $inst;
+            $_SESSION['selected_status'] = $status;
+            $_SESSION['selected_year'] = $y;
+            $_SESSION['selected_month'] = $m;
+            $_SESSION['selected_day'] = $d;
+            $_SESSION['selected_timespan'] = $t;
+        } else if (isset($_SESSION['selected_inst'], $_SESSION['selected_status'])) {
+            $debug_info['source'] = 'Session';
+            $inst = $_SESSION['selected_inst'];
+            $status = $_SESSION['selected_status'];
+            $y = $_SESSION['selected_year'];
+            $m = $_SESSION['selected_month'];
+            $d = $_SESSION['selected_day'];
+            $t = $_SESSION['selected_timespan'];
+        } else {
+            $debug_info['source'] = 'Default';
+            $y = date('Y');
+            $m = date('m');
+            $d = 0;
+            $t = 7;
+        }
+
+        // デバッグ情報を格納します。
+        $debug_info['params'] = [
+            'inst_id' => $inst,
+            'status' => $status,
+            'year' => $y,
+            'month' => $m,
+            'day' => $d,
+            'timespan' => $t,
+        ];
+
+        // ソート処理
+        $sort_map = [
+            'code' => 'r.code',
+            'room_no' => 'i.room_no',
+            'shortname' => 'i.shortname',
+            'reserved' => 'r.reserved',
+            'stime' => 'r.stime',
+            'status' => 'r.process_status'
+        ];
+
+        if (isset($sort_map[$sort_col])) {
+            $_SESSION['rsv_list_sort_col'] = $sort_col;
+            $_SESSION['rsv_list_sort_dir'] = ($sort_dir === 'asc' || $sort_dir === 'desc') ? $sort_dir : 'asc';
+        }
+
+        $current_sort_col = $_SESSION['rsv_list_sort_col'] ?? 'stime';
+        $current_sort_dir = $_SESSION['rsv_list_sort_dir'] ?? 'desc';
+
+        $sort_order = $sort_map[$current_sort_col] . ' ' . $current_sort_dir;
+
+        $debug_info['sort'] = [
+            'current_col' => $current_sort_col,
+            'current_dir' => $current_sort_dir,
+            'order_by' => $sort_order,
+        ];
+
+        // Modelに日付範囲の計算を委譲します。
+        list($date1, $date2) = $reserve_model->calculateDateRange($y, $m, $d, $t);
+
+        // モデルから予約データを取得します。
+        $num_rows = $reserve_model->getNumRows($inst, $date1, $date2, $status);
+        $rows_raw = $reserve_model->getListByInst($inst, $date1, $date2, $status, $page, $sort_order);
+        
+        // Viewで表示しやすいようにデータを加工します。
+        $rsv_status_map = KsuCode::RSV_STATUS;
+        $rows = [];
+        foreach ($rows_raw as $row) {
+            $status_id = $row['process_status'] ?? 0;
+            $row['status_name'] = $rsv_status_map[$status_id] ?? '';
+            $row['is_pending'] = ($row['status_name'] == '申請中');
+            $row['grant_label'] = ($status_id == 1 || $status_id == 3) ? '承認' : '却下';
+            $rows[] = $row;
+        }
+
+        // Viewで使うプルダウンの選択肢を準備します。
+        $status_options_for_select = KsuCode::RSV_STATUS;
+        $status_options_for_select[0] = '全て';
+        ksort($status_options_for_select);
+
+        $instrument_options = (new Instrument)->getList();
+        $is_admin = $this->user->isAdmin();
+
+        // ビューにデータを渡してレンダリングします。
+        $this->view->render('rsv_list.php', [
+            'rows' => $rows,
+            'num_rows' => $num_rows,
+            'inst_selected' => $inst,
+            'rsv_purpose_map' => KsuCode::RSV_PURPOSE, // 利用目的の名称解決用に渡す
+            'selected_y' => $y,
+            'selected_m' => $m,
+            'selected_d' => $d,
+            'selected_t' => $t,
+            'status' => $status,
+            'instrument_options' => $instrument_options,
+            'status_options' => $status_options_for_select,
+            'is_admin' => $is_admin,
+            'page_rows' => KsuCode::PAGE_ROWS,
+            'page' => $page,
+            'sort_col' => $current_sort_col,
+            'sort_dir' => $current_sort_dir,
+            'debug_info' => $debug_info,
+        ]);
+    }
+    /**
+     * 予約の詳細情報を表示します。
+     */
     public function detailAction($id = 0, $page = 1)
     {
-        // 1. 権限チェック (詳細表示はログイン必須)
+        // 権限チェックとして、ログインしているか確認します。
         (new Security)->require('login');
 
         $rsv_id = (int)$id;
         if ($rsv_id === 0) {
-            $this->view->redirect('index.php?to=rsv&do=list');
+            // 予約IDが指定されていない場合は、予約一覧にリダイレクトします。
+            $this->redirect('index.php?to=rsv&do=list');
             return;
         }
 
-        // 2. モデルから予約詳細データを取得
+        // モデルから予約詳細データを取得します。
         $rsv = $this->model->getDetail($rsv_id);
 
         if (!$rsv) {
-            // 予約が見つからない場合のエラー処理
+            // 予約が見つからない場合はエラーメッセージを設定します。
             $this->view->assign('error_message', '指定された予約情報は見つかりませんでした。');
-            $this->view->render('rsv_detail.php');
+            // {
             return;
         }
 
-        // 3. ビューに渡すデータを準備
-        $user_model = new User();
-        $is_admin = $user_model->isAdmin();
-        $is_owner = $user_model->isOwner($rsv['apply_mid']); // 申請者IDで所有者かチェック
+        // ビューに渡すデータを準備
+        $is_admin = $this->user->isAdmin(); // 管理者かどうかを判定します。
+        $is_owner = $this->user->isOwner($rsv['apply_mid']); // 予約の申請者本人かどうかを判定します。
 
+        // 承認状態に応じて、承認/却下ボタンのラベルを決定します。
         $status = $rsv['process_status'];
         $status_label = ($status == 1 || $status == 3) ? '承認' : '却下';
 
+        // 承認状態に応じたCSSクラスをマッピングします。
         $status_class_map = [
             1 => 'text-info',    // 申請中
             2 => 'text-success', // 承認済
@@ -52,29 +195,29 @@ class Reserve extends Controller
         ];
         $status_class = $status_class_map[$status] ?? 'text-dark';
 
-        // ビューにデータを渡す
+        // ビューにデータを渡します。
         $this->view->assign('rsv', $rsv);
         $this->view->assign('is_admin', $is_admin);
         $this->view->assign('is_owner', $is_owner);
         $this->view->assign('status_label', $status_label);
         $this->view->assign('status_class', $status_class);
-        $this->view->assign('page', (int)$page); // 戻るボタン用にページ番号を渡す
+        $this->view->assign('page', (int)$page); // 一覧に戻る際のページ番号を渡します。
 
-        // 4. ビューをレンダリング
+        // ビューをレンダリングします。
         $this->view->render('rsv_detail.php');
     }
 
     /**
-     * 予約入力フォームを表示するアクション
-     * 新規作成と編集の両方を扱う
+     * 予約入力フォームを表示します。
+     * 新規作成と編集の両方に対応します。
      */
     public function inputAction($id = 0, $inst = null, $d = null, $copy = 0)
     {
-        // 1. 権限チェック
+        // 権限チェックとして、ログインと予約権限を確認します。
         (new Security)->require('login');
         (new Security)->require('reserve');
 
-        // 2. データの取得と準備
+        // 予約IDやコピーフラグを取得して、データを準備します。
         $rsv_id = (int)$id;
         $is_copy = ($copy == 1);
 
@@ -83,33 +226,42 @@ class Reserve extends Controller
             $source_rsv = $this->model->getDetail($rsv_id);
             $rsv = $this->model->getDetail(0); // 新規作成用のテンプレートを取得
 
-            // 必要なフィールドをコピー
+            // コピー元のデータから必要なフィールドを新しい予約データにコピーします。
             $fields_to_copy = [
-                'instrument_id', 'purpose', 'master_mid', 'rsv_member',
-                'other_num', 'other_user', 'sample_name', 'sample_state',
-                'sample_nature', 'sample_other', 'xray_chk', 'memo'
+                'instrument_id',
+                'purpose',
+                'master_mid',
+                'rsv_member',
+                'other_num',
+                'other_user',
+                'sample_name',
+                'sample_state',
+                'sample_nature',
+                'sample_other',
+                'xray_chk',
+                'memo'
             ];
             foreach ($fields_to_copy as $field) {
                 if (isset($source_rsv[$field])) {
                     $rsv[$field] = $source_rsv[$field];
                 }
             }
-            $rsv_id = 0; // コピーなのでIDは0にする
+            $rsv_id = 0; // コピーして新規作成するため、IDは0にリセットします。
         } else {
             $rsv = $this->model->getDetail($rsv_id);
         }
 
-        // URLパラメータから機器IDや日付が指定された場合の処理
+        // URLパラメータで機器IDが指定されている場合、予約データに反映します。
         if ($inst !== null) {
             $rsv['instrument_id'] = (int)$inst;
         }
 
         $instrument = null;
-        // instrument_id が空でないことを確認してから getDetail を呼び出す
+        // 機器IDが設定されている場合、機器詳細を取得します。
         if (!empty($rsv['instrument_id'])) {
             $instrument = (new Instrument)->getDetail($rsv['instrument_id']);
         }
-        // instrument が null の場合に備えて null 合体演算子を使用
+        // 機器名を設定します。機器情報が取得できなかった場合は空文字を設定します。
         $rsv['instrument_name'] = $instrument['fullname'] ?? '';
 
         // 開始・終了日時の設定
@@ -121,19 +273,20 @@ class Reserve extends Controller
             }
         }
 
-        if ($rsv_id == 0) { // 新規作成またはコピーの場合
+        // 新規作成またはコピーの場合は、現在時刻を初期値として設定します。
+        if ($rsv_id == 0) {
             $rsv['stime'] = $stime;
             $rsv['etime'] = $stime;
         }
 
-        // 3. ビューに渡すデータを準備
+        // ビューに渡すためのデータを準備します。
         $staffs = (new Staff)->getOptions('responsible');
         $master_sid = isset($rsv['master_member']['sid']) ? $rsv['master_member']['sid'] : '';
 
-        // 予約済みの時間帯を取得 (バリデーション用)
-        $occupied_periods = []; // ここで取得ロジックを実装
+        // 予約済みの時間帯を取得して、クライアントサイドのバリデーションで使用します。
+        $occupied_periods = []; // TODO: 予約済みの時間帯を取得するロジックを実装します。
 
-        // 4. ビューにデータを渡してレンダリング
+        // ビューにデータを渡してレンダリングします。
         $this->view->render('rsv_input.php', [
             'rsv' => $rsv,
             'rsv_id' => $rsv_id,
@@ -149,37 +302,51 @@ class Reserve extends Controller
     }
 
     /**
-     * 予約情報を保存するアクション (rsv_inputから呼び出される)
-     * inst_saveAction という名前で作成
+     * 予約情報を保存します。
+     * 新規作成と更新の両方に対応します。
      */
     public function saveAction()
     {
-        // 1. 権限チェック
+        // 権限チェックとして、ログインと予約権限を確認します。
         (new Security)->require('login');
         (new Security)->require('reserve');
 
-        // 2. データ取得と初期化
+        // POSTされたデータを取得し、予約IDを初期化します。
         $data = $_POST;
         $rsv_id = (int)($data['id'] ?? 0);
 
-        // rsv_input.php のフォーム項目に対応するホワイトリスト
+        // 保存対象となる予約データのフィールドを定義します。
         $rsv_fields = [
-            'id' => 0, 'code' => '', 'instrument_id' => 0, 'apply_mid' => 0, 'master_mid' => 0,
-            'process_status' => 1, 'purpose_id' => 0, 'purpose' => '', 'other_num' => 0,
-            'other_user' => '', 'stime' => '', 'etime' => '', 'sample_name' => '', 'sample_state' => 1,
-            'xray_chk' => 0, 'xray_num' => '', 'memo' => '',
+            'id' => 0,
+            'code' => '',
+            'instrument_id' => 0,
+            'apply_mid' => 0,
+            'master_mid' => 0,
+            'process_status' => 1,
+            'purpose_id' => 0,
+            'purpose' => '',
+            'other_num' => 0,
+            'other_user' => '',
+            'stime' => '',
+            'etime' => '',
+            'sample_name' => '',
+            'sample_state' => 1,
+            'xray_chk' => 0,
+            'xray_num' => '',
+            'memo' => '',
         ];
 
+        // POSTデータから予約データを作成します。未定義のキーにはデフォルト値を設定します。
         $rsv = [];
         foreach ($rsv_fields as $key => $default) {
             $rsv[$key] = $data[$key] ?? $default;
         }
         $rsv['id'] = $rsv_id;
 
-        // 3. バリデーション
+        // バリデーションを実行します。
         $errors = [];
 
-        // 3-1. 予約時間の重複チェック
+        // 予約時間の重複をチェックします。
         $existed_rsv = $this->model->getListByInst($rsv['instrument_id'], $rsv['stime'], $rsv['etime']);
         $is_overlapping = false;
         foreach ($existed_rsv as $existing) {
@@ -196,18 +363,18 @@ class Reserve extends Controller
             );
         }
 
-        // 3-2. 開始・終了時刻の妥当性チェック
+        // 開始時刻と終了時刻の順序が正しいかチェックします。
         if (strtotime($rsv['stime']) >= strtotime($rsv['etime'])) {
             $errors[] = "無効な時間帯です。終了時刻は開始時刻より後に設定してください。";
         }
 
-        // 3-3. 予約期間の長さチェック
+        // 予約期間が長すぎないかチェックします（例: 1週間以内）。
         $diff_days = (strtotime($rsv['etime']) - strtotime($rsv['stime'])) / (60 * 60 * 24);
         if ($diff_days >= 7) {
             $errors[] = "予約期間は1週間までです";
         }
 
-        // 3-4. 利用責任者のチェック
+        // 利用責任者が選択されているか、また有効なメンバーかチェックします。
         $member_model = new Member();
         if (empty($data['master_sid'])) {
             $errors[] = "利用責任者を選択してください";
@@ -220,14 +387,13 @@ class Reserve extends Controller
             }
         }
 
-        // 3-5. 申請者の設定
-        $user_model = new User();
-        $rsv['apply_mid'] = $user_model->getLoginMid();
+        // ログイン中のユーザーを申請者として設定します。
+        $rsv['apply_mid'] = $this->user->getLoginMid();
         if (empty($rsv['apply_mid'])) {
             $errors[] = "申請者の情報が取得できませんでした。再度ログインしてください。";
         }
 
-        // 3-6. 利用代表者のチェック
+        // 利用代表者が1名以上指定されており、それぞれが有効なメンバーかチェックします。
         $rsv_members = [];
         if (isset($data['rsv_member']) && is_array($data['rsv_member'])) {
             foreach ($data['rsv_member'] as $sid) {
@@ -244,28 +410,28 @@ class Reserve extends Controller
             $errors[] = "有効な利用代表者を1名以上指定してください";
         }
 
-        // 4. エラー処理
+        // バリデーションエラーがあった場合、エラーメッセージと共に再度入力フォームを表示します。
         if (count($errors) > 0) {
             $this->view->assign('errors', $errors);
-            $this->view->assign('rsv', array_merge($rsv, $data)); // ユーザーの入力を保持
-            $this->inputAction($rsv_id, $rsv['instrument_id']); // 入力画面を再表示
+            $this->view->assign('rsv', array_merge($rsv, $data)); // ユーザーの入力を保持してフォームに再設定します。
+            $this->inputAction($rsv_id, $rsv['instrument_id']);
             return;
         }
 
-        // 5. データ保存
-        if ($rsv_id == 0) { // 新規作成
+        // データベースに保存します。
+        if ($rsv_id == 0) { // 新規作成の場合は、申請番号を採番し、申請日時を記録します。
             $rsv['code'] = $this->model->nextCode();
             $rsv['reserved'] = date('Y-m-d H:i:s');
         }
         $new_rsv_id = $this->model->write($rsv);
         $rsv_id = ($rsv_id == 0) ? $new_rsv_id : $rsv_id;
 
-        // 関連データの保存
+        // 関連テーブル（利用代表者）のデータを保存します。
         (new RsvMember)->reset($rsv_id);
         foreach ($rsv_members as $member) {
             (new RsvMember)->write(['id' => 0, 'reserve_id' => $rsv_id, 'member_id' => $member['id']]);
         }
-
+        // 関連テーブル（試料情報）のデータを保存します。
         (new RsvSample)->reset($rsv_id);
         if (isset($data['rsv_sample']) && is_array($data['rsv_sample'])) {
             foreach ($data['rsv_sample'] as $val) {
@@ -274,7 +440,127 @@ class Reserve extends Controller
             }
         }
 
-        // 6. 完了後、詳細ページにリダイレクト
-        $this->view->redirect('index.php?to=rsv&do=detail&id=' . $rsv_id);
+        // 保存完了後、予約詳細ページにリダイレクトします。
+        $this->redirect('index.php?to=rsv&do=detail&id=' . $rsv_id);
+    }
+
+    /**
+     * 予約の承認または却下を行います。
+     */
+    public function grantAction($id = null)
+    {
+        // 権限チェックとして、管理者であるか確認します。
+        (new Security)->require('admin');
+
+        $rsv_id = (int)$id;
+
+        // 予約ステータスを切り替えます。(申請中/却下済 -> 承認済, 承認済 -> 却下済)
+        $rsv = $this->model->getDetail($rsv_id);
+        $new_status = ($rsv['process_status'] == 1 || $rsv['process_status'] == 3) ? 2 : 3; // 2:承認済, 3:却下済
+
+        // 更新するデータを準備します。
+        $data = [
+            'id' => $rsv_id,
+            'process_status' => $new_status
+        ];
+        // ステータスが「承認済」になる場合のみ、承認日時を更新します。
+        if ($new_status == 2) {
+            $data['approved'] = date('Y-m-d H:i:s');
+        }
+        $this->model->write($data);
+
+        // 処理完了後、元のページ（予約一覧や詳細ページ）にリダイレクトします。
+        $this->redirect($_SERVER['HTTP_REFERER'] ?? 'index.php?to=rsv&do=list');
+    }
+
+    /**
+     * 予約を削除します。
+     */
+    public function deleteAction($id = null)
+    {
+        // 権限チェックとして、ログインしているか確認します。
+        (new Security)->require('login');
+
+        $rsv_id = (int)$id;
+        $rsv = $this->model->getDetail($rsv_id);
+
+        // 管理者または予約の申請者本人でなければ、操作を許可しません。
+        if (!$this->user->isAdmin() && !$this->user->isOwner($rsv['apply_mid'])) {
+            (new Security)->require('owner', $rsv['apply_mid']);
+        }
+
+        // 予約を削除
+        (new RsvMember)->reset($rsv_id);
+        (new RsvSample)->reset($rsv_id);
+        $this->model->delete($rsv_id);
+
+        // 削除完了後、予約一覧ページへリダイレクトします。
+        $this->redirect('index.php?to=rsv&do=list');
+    }
+
+    /**
+     * 利用者数の集計レポートを表示します。
+     */
+    public function reportAction()
+    {
+        // 権限チェック
+        (new Security)->require('login');
+
+        // デバッグ情報用の変数を初期化
+        $debug_info = [];
+
+        // POSTがあればそれを優先し、なければセッションから検索条件を取得
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $debug_info['source'] = 'POST';
+            $inst_id = $_POST['id'] ?? 0;
+            $status = $_POST['status'] ?? 0;
+            $y = $_POST['y'] ?? date('Y');
+            $m = $_POST['m'] ?? date('m');
+            $d = $_POST['d'] ?? 0;
+            $t = $_POST['t'] ?? 7;
+            $_SESSION['selected_inst'] = $inst_id;
+            $_SESSION['selected_status'] = $status;
+            $_SESSION['selected_year'] = $y;
+            $_SESSION['selected_month'] = $m;
+            $_SESSION['selected_day'] = $d;
+            $_SESSION['selected_timespan'] = $t;
+        } else {
+            $debug_info['source'] = 'Session';
+            $inst_id = $_SESSION['selected_inst'] ?? 0;
+            $status = $_SESSION['selected_status'] ?? 0;
+            $y = $_SESSION['selected_year'] ?? date('Y');
+            $m = $_SESSION['selected_month'] ?? date('m');
+            $d = $_SESSION['selected_day'] ?? 0;
+            $t = $_SESSION['selected_timespan'] ?? 7;
+        }
+
+        // デバッグ情報を格納
+        $debug_info['params'] = [
+            'inst_id' => $inst_id,
+            'status' => $status,
+            'year' => $y,
+            'month' => $m,
+            'day' => $d,
+            'timespan' => $t,
+        ];
+
+        // 検索期間を計算
+        $day = $d > 0 ? $d : 1;
+        $date = new \DateTimeImmutable($y . '-' . $m . '-' . $day);
+        $def = [1 => 'P1D', 7 => 'P1W', 30 => 'P1M'];
+        $period = new \DateInterval($def[$t] ?? 'P1W'); // 不正な値の場合は1週間にフォールバック
+        $date1 = $date->format('Y-m-d 00:00:00');
+        $date2 = $date->add($period)->format('Y-m-d 00:00:00');
+
+        // モデルからレポートデータを取得
+        $data = $this->model->getReport($inst_id, $date1, $date2, $status);
+
+        // ビューをレンダリング
+        $this->view->render('rsv_report.php', [
+            'report_data' => $data['report'],
+            'date1' => $date1,
+            'date2' => $date2,
+            'debug_info' => $debug_info,
+        ]);
     }
 }

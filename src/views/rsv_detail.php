@@ -89,7 +89,7 @@ if (isset($error_message)): ?>
   <?php
     if ($is_admin) {
       // Note: 'rsv_grant' action should be added to the router in index.php to work correctly.
-      echo '<a class="btn btn-outline-success m-2" href="index.php?to=rsv&do=rsv_grant&id=' . urlencode($rsv['id']) . '">' . htmlspecialchars($status_label, ENT_QUOTES, 'UTF-8') . '</a>';
+      echo '<a class="btn btn-outline-success m-2" href="index.php?to=rsv&do=grant&id=' . urlencode($rsv['id']) . '">' . htmlspecialchars($status_label, ENT_QUOTES, 'UTF-8') . '</a>';
     }
     if ($is_admin || $is_owner) {
       echo '<a class="btn btn-outline-primary m-2" href="index.php?to=rsv&do=input&id=' . urlencode($rsv['id']) . '&copy=1">コピー</a>' . PHP_EOL .

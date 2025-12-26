@@ -1,8 +1,6 @@
 <?php
 namespace aic\controllers;
 
-use aic\models\Room;
-use aic\models\User;
 use aic\models\KsuCode;
 
 class Instrument extends Controller
@@ -18,15 +16,14 @@ class Instrument extends Controller
             $selected = intval($c);
         }
 
-        // モデルからデータを取得 (JOINにより部屋情報も含まれる)
+        // モデルからデータを取得する (JOINにより部屋情報も含まれる)。
         $rows = $this->model->getList($where, $orderby);
         
-        // ビューで使用するデータを準備
+        // ビューで使用するデータを準備する。
         $categories = KsuCode::INST_CATEGORY;
-        $user_model = new User();
-        $can_reserve = $user_model->canReserve();
+        $can_reserve = $this->user->canReserve();
 
-        // ビューに渡す
+        // ビューに渡す。
         $this->view->render('inst_list.php', [
             'rows' => $rows,
             'categories' => $categories,
@@ -49,14 +46,11 @@ class Instrument extends Controller
                 ? $image_path
                 : 'img/dummy-image-square1.webp';
 
-            // Check user permissions
-            $user = new User();
-
             $data = [
                 'row' => $instrument,
                 'image_url' => $image_url,
-                'is_admin' => $user->isAdmin(),
-                'can_reserve' => $user->canReserve(),
+                'is_admin' => $this->user->isAdmin(),
+                'can_reserve' => $this->user->canReserve(),
             ];
         } else {
             $data['error'] = '指定された機器は存在しません。';

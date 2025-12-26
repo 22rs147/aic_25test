@@ -1,7 +1,3 @@
-<?php
-// このビューはコントローラから以下の変数を受け取ります:
-// $nav_links, $items_json, $groups_json, $timeline_start, $timeline_end
-?>
 <div class="text-left">
 <?php foreach ($nav_links as $link): ?>
     <a href="<?= htmlspecialchars($link['url'], ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-primary m-1">
@@ -13,7 +9,6 @@
 <div id="visualization" class="mt-3"></div>
 
 <script type="text/javascript">
-  // PHPから渡されたデータを安全にJavaScript変数にエンコードします。
   const items = <?= $items_json ?>;
   const groups = <?= $groups_json ?>;
   const date_start = "<?= htmlspecialchars($timeline_start, ENT_QUOTES, 'UTF-8') ?>";

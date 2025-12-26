@@ -6,12 +6,6 @@ class Member extends Model
 {
     protected $table = "tb_member";
 
-    /**
-     * ユーザーID(uid)をキーに会員詳細情報を取得する
-     * 
-     * @param string $uid ユーザーID
-     * @return array|null 会員情報。見つからない場合はnull
-     */
     public function getDetailByUid($uid)
     {
         $uid_escaped = $this->db->real_escape_string($uid);

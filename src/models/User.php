@@ -45,7 +45,6 @@ class User extends Model {
     public function getDetail($id)
     {
         $conn = $this->db;
-        // SQLインジェクション対策として、入力をエスケープする
         $escaped_id = $conn->real_escape_string($id);
         // protectedプロパティには $this-> でアクセスする
         $sql = sprintf("SELECT * FROM %s WHERE uid='%s'", $this->table, $escaped_id);

@@ -6,7 +6,6 @@ use aic\models\User;
 use aic\models\RsvSample;
 use aic\models\RsvMember;
 use aic\models\Util;
-use aic\views\Html;
 
 class Reserve extends Model {
     protected $table = "tb_reserve";
@@ -46,8 +45,8 @@ class Reserve extends Model {
         $rsv['room_name'] =$room['room_name'];
         $rsv['instrument_fullname'] = $instrument['fullname'];
         $rsv['instrument_shortname'] = $instrument['shortname'];
-        $rsv['apply_member'] = (new Member)->getDetail($rsv['apply_mid']);
-        $rsv['master_member'] = (new Member)->getDetail($rsv['master_mid']);
+        $rsv['apply_member'] = (new Member)->getDetailByUid($rsv['apply_mid']);
+        $rsv['master_member'] = (new Member)->getDetailByUid($rsv['master_mid']);
         $_dept_code = $rsv['master_member']['dept_code'];
         $rsv['dept_name'] = KsuCode::FACULTY_DEPT[$_dept_code];
 
@@ -89,6 +88,30 @@ class Reserve extends Model {
         return sprintf("%d%04d", $row['y'], $row['id']);
     }
 
+    /**
+     * 年月日と期間のパラメータから、検索対象の期間（開始日と終了日）を計算します。
+     */
+    public function calculateDateRange($y, $m, $d, $t)
+    {
+        if ($y > 0 && $m > 0) {
+            $day = $d > 0 ? $d : 1;
+            try {
+                $date = new \DateTimeImmutable($y . '-' . $m . '-' . $day);
+            } catch (\Exception $e) {
+                // 2月30日など、不正な日付が指定された場合はnullを返す
+                return [null, null];
+            }
+
+            $def = [1 => 'P1D', 7 => 'P1W', 30 => 'P1M'];
+            $interval_spec = $def[$t] ?? 'P1W'; // 不正な期間が指定された場合は1週間にフォールバック
+            $period = new \DateInterval($interval_spec);
+            $date1 = $date->format('Y-m-d 00:00:00');
+            $date2 = $date->add($period)->format('Y-m-d 00:00:00');
+            return [$date1, $date2];
+        }
+        return [null, null];
+    }
+
     // $inst_id= 0 for all, or 1~ for one specific instrument 
     // $status=0 for all, or 1~ for one specific status
     function getNumRows($inst_id=0, $date1=null, $date2=null, $status=0)
@@ -107,7 +130,7 @@ class Reserve extends Model {
         if ($status > 0){ 
             $sql .= " AND process_status=$status"; 
         }
-     //echo $sql;
+    //  echo $sql . "<br>";
         $rs = $conn->query($sql);
         if (!$rs) die('エラー: ' . $conn->error);
         return $rs->num_rows;
@@ -119,7 +142,7 @@ class Reserve extends Model {
         $params = [];
         $types = '';
 
-        $sql = "SELECT * FROM {$this->rsv_view} WHERE 1=1";
+    $sql = "SELECT * FROM {$this->rsv_view} WHERE 1=1";
 
         if ($inst_id) {
             $sql .= " AND instrument_id = ?";
@@ -145,8 +168,7 @@ class Reserve extends Model {
         }
 
         if(!empty($sort)){
-            // 重要: ORDER BY句はパラメータ化できません。必ずホワイトリストで検証してください。
-            $allowedSortColumns = ['process_status', 'stime', 'etime', 'master_name']; // 例
+            $allowedSortColumns = ['process_status', 'stime', 'etime', 'master_name'];
             if (in_array($sort, $allowedSortColumns, true)) {
                 $sql .= " ORDER BY " . $sort;
             }
@@ -160,10 +182,14 @@ class Reserve extends Model {
             $params[] = $offset;
             $types .= 'ii';
         }
+
+        // デバッグ用SQLとパラメータ出力
+        // echo '<pre style="background:#eee; color:#333; padding:8px;">SQL: ' . htmlspecialchars($sql) . "\n";
+        // echo 'Params: ' . htmlspecialchars(json_encode($params)) . "\n";
+        // echo 'Types: ' . htmlspecialchars($types) . "</pre>";
         
         $stmt = $conn->prepare($sql);
         if ($stmt === false) {
-            // 本番環境ではエラーをログに記録し、例外をスローするのが望ましい
             throw new \Exception('Prepare failed: ' . $conn->error);
         }
 
@@ -187,7 +213,7 @@ class Reserve extends Model {
         $conn = $this->db; 
         $sql = sprintf("SELECT * FROM %s WHERE 1 ", $this->rsv_report);
         if ($inst_id){ 
-            $sql .= " AND instrument_id=$inst_id"; 
+            $sql .= " AND instrument_id=" . intval($inst_id); 
         }
         if ($date1 and $date2){
             $sql .= " AND GREATEST(stime, '{$date1}') <= LEAST(etime, '{$date2}')"; 
@@ -195,7 +221,7 @@ class Reserve extends Model {
             $sql .= " AND etime>'{$date1}'";
         }
         if ($status > 0){ 
-            $sql .= " AND process_status=$status"; 
+            $sql .= " AND process_status=" . intval($status); 
         }
         $sql .= ' ORDER BY stime, etime';
         

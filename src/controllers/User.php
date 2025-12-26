@@ -53,7 +53,7 @@ class User extends Controller
         $uid = $_POST['uid'];
         $upass = $_POST['upass'];
 
-        // 既存のUserモデルのcheckメソッドで認証
+        // Userモデルのcheckメソッドで認証
         $user = $this->model->check($uid, $upass);
         
         if ($user){

@@ -23,7 +23,7 @@ use aic\models\KsuCode;
                 <?= htmlspecialchars(KsuCode::MBR_CATEGORY[$row['category']] ?? '不明') ?>
                 <?php if ($row['category'] > 1): //教育職員 ?>
                     <span class="float-right">
-                        <a class="btn btn-outline-primary ml-1" href="index.php?to=mbr&do=stf_detail&id=<?= htmlspecialchars($row['id']) ?>">教職員詳細</a>
+                        <a class="btn btn-outline-primary ml-1" href="index.php?to=stf&do=detail&id=<?= htmlspecialchars($row['id']) ?>">教職員詳細</a>
                     </span>
                 <?php endif; ?>
             </td>
