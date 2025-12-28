@@ -16,7 +16,7 @@ use DateTime;
 class Reserve extends Controller
 {
     /**
-     * 予約一覧を表示します。
+     * 登録された予約を一覧形式で表示します。
      */
     public function listAction(
         $inst = 0,
@@ -80,7 +80,7 @@ class Reserve extends Controller
             'timespan' => $t,
         ];
 
-        // ソート処理
+        // 一覧の表示順序を制御するために、ソート条件を設定します。
         $sort_map = [
             'code' => 'r.code',
             'room_no' => 'i.room_no',
@@ -154,7 +154,7 @@ class Reserve extends Controller
         ]);
     }
     /**
-     * 予約の詳細情報を表示します。
+     * 特定の予約に関する詳細な構成情報を表示します。
      */
     public function detailAction($id = 0, $page = 1)
     {
@@ -174,12 +174,11 @@ class Reserve extends Controller
         if (!$rsv) {
             // 予約が見つからない場合はエラーメッセージを設定します。
             $this->view->assign('error_message', '指定された予約情報は見つかりませんでした。');
-            // {
             return;
         }
 
-        // ビューに渡すデータを準備
-        $is_admin = $this->user->isAdmin(); // 管理者かどうかを判定します。
+        // 画面表示に必要な権限情報やラベル情報を準備します。
+        $is_admin = $this->user->isAdmin();
         $is_owner = $this->user->isOwner($rsv['apply_mid']); // 予約の申請者本人かどうかを判定します。
 
         // 承認状態に応じて、承認/却下ボタンのラベルを決定します。
@@ -208,8 +207,7 @@ class Reserve extends Controller
     }
 
     /**
-     * 予約入力フォームを表示します。
-     * 新規作成と編集の両方に対応します。
+     * 予約の新規登録または編集を行うための入力画面を表示します。
      */
     public function inputAction($id = 0, $inst = null, $d = null, $copy = 0)
     {
@@ -221,7 +219,7 @@ class Reserve extends Controller
         $rsv_id = (int)$id;
         $is_copy = ($copy == 1);
 
-        // コピーの場合、元のデータを取得して新しいデータにマージ
+        // 既存の予約内容を再利用するために、元のデータを取得して新規データへコピーします。
         if ($is_copy && $rsv_id > 0) {
             $source_rsv = $this->model->getDetail($rsv_id);
             $rsv = $this->model->getDetail(0); // 新規作成用のテンプレートを取得
@@ -264,7 +262,7 @@ class Reserve extends Controller
         // 機器名を設定します。機器情報が取得できなかった場合は空文字を設定します。
         $rsv['instrument_name'] = $instrument['fullname'] ?? '';
 
-        // 開始・終了日時の設定
+        // 予約の期間を特定するために、開始日時と終了日時の初期値を設定します。
         $stime = date('Y-m-d H:00');
         if ($d !== null) {
             $ymd = DateTime::createFromFormat('ymd', $d);
@@ -302,8 +300,7 @@ class Reserve extends Controller
     }
 
     /**
-     * 予約情報を保存します。
-     * 新規作成と更新の両方に対応します。
+     * 入力された予約情報を検証し、データベースへの保存または更新を行います。
      */
     public function saveAction()
     {
@@ -343,7 +340,7 @@ class Reserve extends Controller
         }
         $rsv['id'] = $rsv_id;
 
-        // バリデーションを実行します。
+        // 入力内容の整合性を保つために、各種バリデーションを実行します。
         $errors = [];
 
         // 予約時間の重複をチェックします。
@@ -418,7 +415,7 @@ class Reserve extends Controller
             return;
         }
 
-        // データベースに保存します。
+        // バリデーションを通過したデータを、データベースの予約テーブルへ永続化します。
         if ($rsv_id == 0) { // 新規作成の場合は、申請番号を採番し、申請日時を記録します。
             $rsv['code'] = $this->model->nextCode();
             $rsv['reserved'] = date('Y-m-d H:i:s');
@@ -445,7 +442,7 @@ class Reserve extends Controller
     }
 
     /**
-     * 予約の承認または却下を行います。
+     * 管理者権限により、予約の承認ステータスを更新します。
      */
     public function grantAction($id = null)
     {
@@ -456,7 +453,7 @@ class Reserve extends Controller
 
         // 予約ステータスを切り替えます。(申請中/却下済 -> 承認済, 承認済 -> 却下済)
         $rsv = $this->model->getDetail($rsv_id);
-        $new_status = ($rsv['process_status'] == 1 || $rsv['process_status'] == 3) ? 2 : 3; // 2:承認済, 3:却下済
+        $new_status = ($rsv['process_status'] == 1 || $rsv['process_status'] == 3) ? 2 : 3; // ステータスを承認済（2）または却下済（3）に切り替えます。
 
         // 更新するデータを準備します。
         $data = [
@@ -474,7 +471,7 @@ class Reserve extends Controller
     }
 
     /**
-     * 予約を削除します。
+     * 指定された予約データおよび関連情報をシステムから削除します。
      */
     public function deleteAction($id = null)
     {
@@ -489,7 +486,7 @@ class Reserve extends Controller
             (new Security)->require('owner', $rsv['apply_mid']);
         }
 
-        // 予約を削除
+        // 予約データおよび関連する共同利用者・試料情報をデータベースから物理削除します。
         (new RsvMember)->reset($rsv_id);
         (new RsvSample)->reset($rsv_id);
         $this->model->delete($rsv_id);
@@ -499,17 +496,17 @@ class Reserve extends Controller
     }
 
     /**
-     * 利用者数の集計レポートを表示します。
+     * 指定された期間内の予約状況を集計し、レポートとして表示します。
      */
     public function reportAction()
     {
-        // 権限チェック
+        // ログイン状態を確認し、権限のないユーザーのアクセスを制限します。
         (new Security)->require('login');
 
-        // デバッグ情報用の変数を初期化
+        // 処理の経過を確認するためのデバッグ情報用変数を初期化します。
         $debug_info = [];
 
-        // POSTがあればそれを優先し、なければセッションから検索条件を取得
+        // POSTリクエストがあればそれを優先し、なければセッションから検索条件を取得します。
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $debug_info['source'] = 'POST';
             $inst_id = $_POST['id'] ?? 0;
@@ -534,7 +531,7 @@ class Reserve extends Controller
             $t = $_SESSION['selected_timespan'] ?? 7;
         }
 
-        // デバッグ情報を格納
+        // 取得した検索パラメータをデバッグ情報に格納します。
         $debug_info['params'] = [
             'inst_id' => $inst_id,
             'status' => $status,
@@ -544,7 +541,7 @@ class Reserve extends Controller
             'timespan' => $t,
         ];
 
-        // 検索期間を計算
+        // 指定された条件に基づき、レポートの集計対象となる期間を計算します。
         $day = $d > 0 ? $d : 1;
         $date = new \DateTimeImmutable($y . '-' . $m . '-' . $day);
         $def = [1 => 'P1D', 7 => 'P1W', 30 => 'P1M'];
@@ -552,10 +549,10 @@ class Reserve extends Controller
         $date1 = $date->format('Y-m-d 00:00:00');
         $date2 = $date->add($period)->format('Y-m-d 00:00:00');
 
-        // モデルからレポートデータを取得
+        // 計算した期間と条件を用いて、モデルから集計データを取得します。
         $data = $this->model->getReport($inst_id, $date1, $date2, $status);
 
-        // ビューをレンダリング
+        // 集計結果をビューに渡し、レポート画面をレンダリングします。
         $this->view->render('rsv_report.php', [
             'report_data' => $data['report'],
             'date1' => $date1,
