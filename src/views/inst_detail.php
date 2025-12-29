@@ -29,7 +29,7 @@ if (!empty($error)): ?>
     <?php if ($can_reserve): ?>
         <a class="btn btn-outline-success m-1" href="?to=rsv&do=input&inst=<?= (int)$row['id'] ?>">予約</a>
     <?php endif; ?>
-    <a class="btn btn-outline-success m-1" href="?to=aic&do=list&id=<?= (int)$row['id'] ?>">空き状態</a>
+    <a class="btn btn-outline-success m-1" href="?to=aic&do=detail&id=<?= (int)$row['id'] ?>">空き状態</a>
     <a href="?to=inst&do=list" class="btn btn-outline-info m-1">戻る</a>
     </div>
 
