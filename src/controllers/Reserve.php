@@ -190,7 +190,7 @@ class Reserve extends Controller
             1 => 'text-info',    // 申請中
             2 => 'text-success', // 承認済
             3 => 'text-danger',  // 却下済
-            4 => 'text-muted',   // キャンセル済 (例)
+            4 => 'text-muted',   // キャンセル済
         ];
         $status_class = $status_class_map[$status] ?? 'text-dark';
 

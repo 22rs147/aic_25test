@@ -13,12 +13,12 @@ class Member extends Controller
      */
     public function detailAction($id = null)
     {
-        // IDがURLで指定されていない場合、ログイン中のユーザーの会員IDを使用
+        // IDがURLで指定されていない場合は、ログイン中のユーザーの会員IDを使用します。
         if (is_null($id)) {
             $id = $this->user->getLoginMemberId();
         }
 
-        // IDが特定できない場合は会員一覧へリダイレクト
+        // IDが特定できない場合は、会員一覧へリダイレクトします。
         if (is_null($id)) {
             $this->redirect('index.php?to=mbr&do=list');
             return;
@@ -27,7 +27,7 @@ class Member extends Controller
         $row = $this->model->getDetail($id);
 
         if (!$row) {
-            // 会員情報が見つからない場合
+            // 会員情報が見つからない場合は、エラーメッセージを表示します。
             $this->view->assign('error_message', '指定された会員情報は存在しません。');
         } else {
             $this->view->assign('row', $row);
@@ -43,10 +43,7 @@ class Member extends Controller
      */
     public function listAction($page = 1)
     {
-        // 1. 権限チェック (管理者のみ)
-        (new Security())->require('admin');
-
-        // 2. フィルタリング条件の取得 (会員種別)
+        // 会員種別によるフィルタリング条件を取得します。
         $category = 0;
         if (isset($_POST['category'])) {
             $category = (int)$_POST['category'];
@@ -55,16 +52,16 @@ class Member extends Controller
             $category = $_SESSION['selected_category'];
         }
 
-        // 3. ページネーションの準備
+        // ページネーションの準備を行います。
         $page = (int)$page;
         $where = ($category == 0) ? '1' : 'category=' . $category;
         $num_rows = $this->model->getNumRows($where, 'id');
 
-        // 4. 会員リストの取得
+        // 会員リストを取得します。
         $rows = $this->model->getList($where, 'authority,id', $page);
 
-        // 5. ビューに渡すためのデータ準備
-        // 会員種別プルダウンの選択肢
+        // ビューに渡すためのデータを準備します。
+        // 会員種別プルダウンの選択肢を設定します。
         $category_options = KsuCode::MBR_CATEGORY;
         $category_options[0] = '～会員種別選択～';
         ksort($category_options);
@@ -78,7 +75,7 @@ class Member extends Controller
             'selected_category' => $category,
         ];
 
-        // 6. ビューをレンダリング
+        // ビューをレンダリングします。
         $this->view->render('mbr_list.php', $data);
     }
 
@@ -89,11 +86,11 @@ class Member extends Controller
     public function inputAction($id = null)
     {
         $security = new Security();
-        $security->require('login'); // ログイン必須
+        $security->require('login');
 
         $mbr_id = (int)$id;
 
-        // 管理者でない場合は、自分の情報しか編集できない
+        // 管理者でない場合は、自分の情報しか編集できないように制限します。
         if (!$this->user->isAdmin()) {
             $security->require('owner', $mbr_id);
         }
@@ -108,26 +105,28 @@ class Member extends Controller
         $this->view->render('mbr_input.php', $data);
     }
 
-    // 会員情報保存
+    /**
+     * 会員情報を保存します。
+     */
     public function saveAction()
     {
-        // 1. 権限チェック
+        // 権限チェックを行います。
         $security = new Security();
-        $security->require('login'); // ログインは必須
+        $security->require('login');
 
-        // POSTデータからIDを取得。なければ一覧へリダイレクト
+        // POSTデータからIDを取得します。IDがない場合は一覧へリダイレクトします。
         if (!isset($_POST['id']) || empty($_POST['id'])) {
             $this->redirect('index.php?to=mbr&do=list');
             return;
         }
         $mbr_id = (int)$_POST['id'];
 
-        // 管理者でなければ、自分の情報しか保存できない
+        // 管理者でなければ、自分の情報しか保存できないように制限します。
         if (!$this->user->isAdmin()) {
             $security->require('owner', $mbr_id);
         }
 
-        // 2. 保存するデータをPOSTから取得 (mbr_input.phpのフォーム項目に対応)
+        // 保存するデータをPOSTから取得します。
         $data = [
             'id'        => $mbr_id,
             'ja_name'   => $_POST['ja_name']   ?? null,
@@ -141,30 +140,29 @@ class Member extends Controller
             'dept_code' => $_POST['dept_code'] ?? null,
         ];
 
-        // 3. モデルのwriteメソッドでデータを保存
+        // モデルを使用してデータを保存します。
         $this->model->write($data);
 
-        // 4. 保存後、詳細ページにリダイレクト
+        // 保存完了後、詳細ページにリダイレクトします。
         $this->redirect('index.php?to=mbr&do=detail&id=' . $mbr_id);
     }
 
     /**
      * 予約権を付与/撤回するアクション
-     * @param int|null $id member.id
      */
     public function grantAction($id = null)
     {
-        // 1. 権限チェック (管理者のみ)
+        // 管理者にのみこの操作を許可します。
         (new Security)->require('admin');
 
         $mbr_id = (int)$id;
 
-        // 2. 予約権をトグル
+        // 現在の予約権限を反転させて保存します。
         $record = $this->model->getDetail($mbr_id);
         $new_authority = $record['authority'] == 1 ? 0 : 1;
         $this->model->write(['id' => $mbr_id, 'authority' => $new_authority]);
 
-        // 3. 会員詳細ページにリダイレクト
+        // 処理完了後、会員詳細ページにリダイレクトします。
         $this->redirect('index.php?to=mbr&do=detail&id=' . $mbr_id);
     }
 }

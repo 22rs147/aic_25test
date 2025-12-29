@@ -8,23 +8,23 @@ class User extends Controller
 
     public function loginAction()
     {
-        // ログイン済みならホームページへリダイレクト
+        // 既にログイン済みの場合は、機器一覧画面へリダイレクトします。
         if (isset($_SESSION['uid'])) {
             $this->view->redirect('index.php?to=inst&do=list');
-            return; // redirect()内でexit()が呼ばれる
+            return;
         }
         $this->view->render('usr_login.php');
     }
 
     /**
-     * ログアウト処理
+     * ログアウト処理を行います。
      */
     public function logoutAction()
     {
-        // セッション変数をすべて空にする
+        // セッション変数をすべて空にします。
         $_SESSION = [];
 
-        // セッションクッキーを削除
+        // セッションクッキーを削除します。
         if (ini_get("session.use_cookies")) {
             $params = session_get_cookie_params();
             setcookie(session_name(), '', time() - 42000,
@@ -33,15 +33,15 @@ class User extends Controller
             );
         }
 
-        // セッションを完全に破棄
+        // セッションを完全に破棄します。
         session_destroy();
 
-        // ログインページにリダイレクト
+        // ログアウト完了後、ログインページにリダイレクトします。
         $this->view->redirect('index.php?to=user&do=login');
     }
 
     /**
-     * ユーザー認証処理
+     * ユーザー認証処理を行います。
      */
     public function authAction()
     {
@@ -53,11 +53,11 @@ class User extends Controller
         $uid = $_POST['uid'];
         $upass = $_POST['upass'];
 
-        // Userモデルのcheckメソッドで認証
+        // Userモデルを使用して認証を行います。
         $user = $this->model->check($uid, $upass);
         
         if ($user){
-            // 認証成功：セッションIDを再生成し、情報を格納
+            // 認証に成功した場合、セッションIDを再生成し、ユーザー情報を格納します。
             session_regenerate_id(true);
 
             $_SESSION['uid'] = $user['uid'];
@@ -66,7 +66,7 @@ class User extends Controller
 
             $this->model->updateLoginTime($user['uid'], date('Y-m-d H:i:s'));
 
-            // 関連する会員情報を取得してセッションに格納
+            // 関連する会員情報を取得し、セッションに格納します。
             $member_model = new Member();
             $member = $member_model->getDetailByUid($user['uid']);
             if ($member) {
@@ -76,7 +76,7 @@ class User extends Controller
 
             $this->view->redirect('index.php?to=inst&do=list');
         } else {
-            // 認証失敗
+            // 認証に失敗した場合は、エラーメッセージを表示します。
             $this->view->assign('error_message', 'ユーザーIDまたはパスワードが間違っています。');
             $this->view->render('usr_login.php'); 
         }

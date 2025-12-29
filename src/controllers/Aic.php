@@ -169,8 +169,8 @@ class Aic extends Controller
         $current = clone $_start;
         // 開始日から1週間分の日付行を順番に作成します。
         for ($i = 0; $i < 7; $i++) {
-            $date_str = $current->format('Y-m-d'); // グループID
-            $ymd      = $current->format('ymd');   // URL用パラメータ
+            $date_str = $current->format('Y-m-d');
+            $ymd      = $current->format('ymd');
             
             // ユーザーが直感的に理解できるよう、日付を日本語形式に変換します。
             $label = Util::jpdate($date_str);
