@@ -35,34 +35,22 @@ class Aic extends Controller
         $reserve_model = new Reserve();
         $instrument_model = new Instrument();
 
-        $items = $reserve_model->getItems($inst_id_filter, $timeline_start_str, $timeline_end_str);
+        $items = $reserve_model->getItems(0, $timeline_start_str, $timeline_end_str);
 
         // タイムラインの各行（機器リスト）を作成し、詳細ページへのリンクを設定します。
         $groups = [];
-        if ($inst_id_filter > 0) {
-            // フィルタが指定されている場合は、該当する機器のみをグループに追加します。
-            $instrument = $instrument_model->getDetail($inst_id_filter);
-            if ($instrument) {
-                $link = sprintf(
-                    '<a class="btn btn-info" href="?to=aic&do=detail&id=%d&d=%s">%s</a>',
-                    $instrument['id'],
-                    $ymd,
-                    htmlspecialchars($instrument['fullname'], ENT_QUOTES, 'UTF-8')
-                );
-                $groups[] = ['id' => $instrument['id'], 'content' => $link];
-            }
-        } else {
-            // フィルタがない場合は、登録されている全ての機器を表示対象とします。
-            $instruments = $instrument_model->getList();
-            foreach ($instruments as $instrument) {
-                $link = sprintf(
-                    '<a class="btn btn-info" href="?to=aic&do=detail&id=%d&d=%s">%s</a>',
-                    $instrument['id'],
-                    $ymd,
-                    htmlspecialchars($instrument['fullname'], ENT_QUOTES, 'UTF-8')
-                );
-                $groups[] = ['id' => $instrument['id'], 'content' => $link];
-            }
+        $instruments = $instrument_model->getList();
+        foreach ($instruments as $instrument) {
+            $inst_id = $instrument['id'];
+            $link = '<a class="btn btn-info" href="%s?to=aic&do=detail&id=%d&d=%s">%s</a>' . PHP_EOL;
+            $content = sprintf(
+                $link,
+                $_SERVER['PHP_SELF'],
+                $inst_id,
+                $ymd,
+                htmlspecialchars($instrument['fullname'], ENT_QUOTES, 'UTF-8')
+            );
+            $groups[] = ['id' => $inst_id, 'content' => $content];
         }
 
         // 日付移動用のナビゲーションリンクを作成します。
@@ -156,7 +144,7 @@ class Aic extends Controller
             $normalized_items[] = [
                 'id'      => $item['id'],
                 'group'   => $group_id,        // どの行（日付）に表示するか
-                'content' => $item['content'], // 表示文字
+                'content' => $item['content'] ?? '', // 表示文字
                 'start'   => $view_start,      // 表示上の開始時間
                 'end'     => $view_end,        // 表示上の終了時間
                 'className' => $item['className'] ?? '',
@@ -168,7 +156,7 @@ class Aic extends Controller
         $groups = [];
         $current = clone $_start;
         // 開始日から1週間分の日付行を順番に作成します。
-        for ($i = 0; $i < 7; $i++) {
+        for ($i = 0; $i < 8; $i++) {
             $date_str = $current->format('Y-m-d');
             $ymd      = $current->format('ymd');
             
@@ -176,8 +164,10 @@ class Aic extends Controller
             $label = Util::jpdate($date_str);
             
             // 予約入力画面へ遷移するためのボタンHTMLを組み立てます。
+            $link = '<a class="btn btn-info" href="%s?to=rsv&do=input&inst=%d&d=%s">%s予約する</a>';
             $link_html = sprintf(
-                '<a class="btn btn-info" href="?to=rsv&do=input&inst=%d&d=%s">%s予約する</a>',
+                $link,
+                $_SERVER['PHP_SELF'],
                 $inst_id,
                 $ymd,
                 $label
