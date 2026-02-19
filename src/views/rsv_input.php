@@ -8,6 +8,15 @@ foreach($rsv as $key => $value){
 }
 ?>
 <h2>総合機器センター機器設備利用申請</h2>
+<?php if (!empty($errors)): ?>
+    <div class="alert alert-danger" style="font-size: 1.25rem;">
+        <ul>
+            <?php foreach ($errors as $error): ?>
+                <li><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+<?php endif; ?>
 <form class="needs-validation" method="post" action="?to=rsv&do=save">
 <table class="table table-bordered table-hover">
 <input type="hidden" name="id" value="<?= htmlspecialchars($rsv_id, ENT_QUOTES, 'UTF-8') ?>">

@@ -209,7 +209,7 @@ class Reserve extends Controller
     /**
      * 予約の新規登録または編集を行うための入力画面を表示します。
      */
-    public function inputAction($id = 0, $inst = null, $d = null, $copy = 0)
+    public function inputAction($id = 0, $inst = null, $d = null, $copy = 0, $rsv_data = null)
     {
         // 権限チェックとして、ログインと予約権限を確認します。
         (new Security)->require('login');
@@ -247,6 +247,11 @@ class Reserve extends Controller
             $rsv_id = 0; // コピーして新規作成するため、IDは0にリセットします。
         } else {
             $rsv = $this->model->getDetail($rsv_id);
+        }
+
+        // エラーなどで入力データが渡された場合は、DB等のデータを上書きして入力内容を復元します。
+        if ($rsv_data) {
+            $rsv = array_merge($rsv, $rsv_data);
         }
 
         // URLパラメータで機器IDが指定されている場合、予約データに反映します。
@@ -378,26 +383,35 @@ class Reserve extends Controller
         } else {
             $master_member = $member_model->getDetailBySid($data['master_sid']);
             if ($master_member) {
-                $rsv['master_mid'] = $master_member['id'];
+                $rsv['master_mid'] = $master_member['uid'];
             } else {
                 $errors[] = "指定された利用責任者は無効です。";
             }
         }
 
         // ログイン中のユーザーを申請者として設定します。
-        $rsv['apply_mid'] = $this->user->getLoginMid();
+        $rsv['apply_mid'] = $this->user->getLoginUid();
         if (empty($rsv['apply_mid'])) {
             $errors[] = "申請者の情報が取得できませんでした。再度ログインしてください。";
+        } else {
+            // 申請者が会員テーブルに存在するかチェックします。
+            if (!$member_model->getDetailByUid($rsv['apply_mid'])) {
+                $errors[] = "申請者の会員情報が見つかりません。";
+            }
         }
 
         // 利用代表者が1名以上指定されており、それぞれが有効なメンバーかチェックします。
         $rsv_members = [];
+        $check_dedupe = [];
         if (isset($data['rsv_member']) && is_array($data['rsv_member'])) {
             foreach ($data['rsv_member'] as $sid) {
                 if (empty(trim($sid))) continue;
                 $member = $member_model->getDetailBySid(trim($sid));
                 if ($member) {
-                    $rsv_members[] = $member;
+                    if (!in_array($member['id'], $check_dedupe)) {
+                        $rsv_members[] = $member;
+                        $check_dedupe[] = $member['id'];
+                    }
                 } else {
                     $errors[] = sprintf("'%s'：無効な利用代表者IDです", htmlspecialchars($sid, ENT_QUOTES, 'UTF-8'));
                 }
@@ -410,8 +424,13 @@ class Reserve extends Controller
         // バリデーションエラーがあった場合、エラーメッセージと共に再度入力フォームを表示します。
         if (count($errors) > 0) {
             $this->view->assign('errors', $errors);
-            $this->view->assign('rsv', array_merge($rsv, $data)); // ユーザーの入力を保持してフォームに再設定します。
-            $this->inputAction($rsv_id, $rsv['instrument_id']);
+            $rsv_merged = array_merge($rsv, $data);
+            // ビューが期待する形式（配列の配列）に利用代表者データを変換します
+            if (isset($data['rsv_member']) && is_array($data['rsv_member'])) {
+                $rsv_merged['rsv_member'] = array_map(function($sid) { return ['sid' => $sid]; }, $data['rsv_member']);
+            }
+
+            $this->inputAction($rsv_id, $rsv['instrument_id'], null, 0, $rsv_merged);
             return;
         }
 
@@ -431,7 +450,8 @@ class Reserve extends Controller
         // 関連テーブル（試料情報）のデータを保存します。
         (new RsvSample)->reset($rsv_id);
         if (isset($data['rsv_sample']) && is_array($data['rsv_sample'])) {
-            foreach ($data['rsv_sample'] as $val) {
+            $samples = array_unique($data['rsv_sample']);
+            foreach ($samples as $val) {
                 $other = ($val == 4 && isset($data['sample_other'])) ? $data['sample_other'] : '';
                 (new RsvSample)->write(['id' => 0, 'reserve_id' => $rsv_id, 'nature' => $val, 'other' => $other]);
             }
