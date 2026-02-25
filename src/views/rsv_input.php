@@ -29,7 +29,7 @@ foreach($rsv as $key => $value){
     <td colspan="2"><?= htmlspecialchars($apply_member['sid'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
 </tr>
 <tr><td class="text-info form-group">利用目的※</td>
-    <td colspan="2"><?= Html::select($rsv_purpose_options, 'purposed', [$purpose]) ?>
+    <td colspan="2"><?= Html::select($rsv_purpose_options, 'purpose_id', [$purpose_id]) ?>
     </td>
     <td colspan="2"><?= Html::input('text', 'purpose', $purpose, ' placeholder="「その他」の内容"') ?></td>
 </tr>

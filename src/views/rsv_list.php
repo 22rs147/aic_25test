@@ -92,7 +92,7 @@ function sort_link($label, $column, $current_col, $current_dir) {
             <?php // 利用機器名（略称） ?>
             <td><?= $row['shortname'] ?></td>
             <?php // 利用目的 ?>
-            <td><?= isset($row['purpose_id']) && isset($rsv_purpose_map[$row['purpose_id']]) ? $rsv_purpose_map[$row['purpose_id']] . ' ' . htmlspecialchars($row['purpose'] ?? '') : htmlspecialchars($row['purpose'] ?? '') ?></td>
+            <td><?= ($rsv_purpose_map[$row['purpose_id'] ?? 0] ?? '') . ' ' . htmlspecialchars($row['purpose'] ?? '') ?></td>
             <?php // 申請日 ?>
             <td><?= $row['reserved'] ?></td>
             <?php // 日本語フォーマットの利用開始日 (Viewでフォーマット) ?>

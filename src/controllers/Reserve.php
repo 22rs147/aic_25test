@@ -117,6 +117,15 @@ class Reserve extends Controller
         $rsv_status_map = KsuCode::RSV_STATUS;
         $rows = [];
         foreach ($rows_raw as $row) {
+            // purpose_idが取得できていない場合は詳細から取得する
+            if (!isset($row['purpose_id'])) {
+                $detail = $reserve_model->getDetail($row['id']);
+                if ($detail) {
+                    $row['purpose_id'] = $detail['purpose_id'] ?? 0;
+                    $row['purpose'] = $detail['purpose'] ?? '';
+                }
+            }
+
             $status_id = $row['process_status'] ?? 0;
             $row['status_name'] = $rsv_status_map[$status_id] ?? '';
             $row['is_pending'] = ($row['status_name'] == '申請中');
@@ -282,6 +291,10 @@ class Reserve extends Controller
             $rsv['etime'] = $stime;
         }
 
+        if (!isset($rsv['purpose_id'])) {
+            $rsv['purpose_id'] = 0;
+        }
+
         // ビューに渡すためのデータを準備します。
         $staffs = (new Staff)->getOptions('responsible');
         $master_sid = isset($rsv['master_member']['sid']) ? $rsv['master_member']['sid'] : '';
@@ -343,6 +356,7 @@ class Reserve extends Controller
         foreach ($rsv_fields as $key => $default) {
             $rsv[$key] = $data[$key] ?? $default;
         }
+        $rsv['purpose_id'] = (int)$rsv['purpose_id'];
         $rsv['id'] = $rsv_id;
 
         // 入力内容の整合性を保つために、各種バリデーションを実行します。
