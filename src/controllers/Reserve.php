@@ -188,7 +188,7 @@ class Reserve extends Controller
 
         // 画面表示に必要な権限情報やラベル情報を準備します。
         $is_admin = $this->user->isAdmin();
-        $is_owner = $this->user->isOwner($rsv['apply_mid']); // 予約の申請者本人かどうかを判定します。
+        $is_owner = $this->user->isOwner($rsv['apply_member']['id']); // 予約の申請者本人かどうかを判定します。
 
         // 承認状態に応じて、承認/却下ボタンのラベルを決定します。
         $status = $rsv['process_status'];
@@ -516,8 +516,8 @@ class Reserve extends Controller
         $rsv = $this->model->getDetail($rsv_id);
 
         // 管理者または予約の申請者本人でなければ、操作を許可しません。
-        if (!$this->user->isAdmin() && !$this->user->isOwner($rsv['apply_mid'])) {
-            (new Security)->require('owner', $rsv['apply_mid']);
+        if (!$this->user->isAdmin() && !$this->user->isOwner($rsv['apply_member']['id'])) {
+            (new Security)->require('owner', $rsv['apply_member']['id']);
         }
 
         // 予約データおよび関連する共同利用者・試料情報をデータベースから物理削除します。
